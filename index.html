@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Radio Monitor Pro</title>
+    <title>Radio Monitor Pro (Mac Bridge Version)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root {
@@ -22,11 +22,10 @@
 
         .freq { font-size: 3.5rem; color: var(--accent); text-align: center; margin: 5px 0; font-weight: 800; letter-spacing: -1px; }
         
-        /* Signal Meter Styling */
         .meter-container { margin: 20px 0; }
         .meter-label-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; }
         .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; border: 1px solid #334155; overflow: hidden; position: relative; }
-        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e); transition: width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e); transition: width 0.5s ease; }
         
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .stat-box { background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 12px; border: 1px solid #334155; }
@@ -54,12 +53,13 @@
         <p class="label">Hardware Web Address</p>
         <input type="text" id="targetAddr" placeholder="e.g. 192.168.1.100">
         <button class="save" onclick="saveSettings()">Apply Settings</button>
+        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 15px;">Note: Ensure bridge.py is running in the background.</p>
     </div>
 
     <div class="header">
         <div>
             <span id="dot" class="status-dot" style="background: #ef4444;"></span>
-            <span class="label" id="statusText">Disconnected</span>
+            <span class="label" id="statusText">Bridge Offline</span>
         </div>
         <button class="settings-btn" onclick="toggleSettings()">⚙</button>
     </div>
@@ -79,7 +79,7 @@
     <div class="now-playing">
         <div class="label" style="margin-bottom: 5px;">RDS / Metadata</div>
         <div id="title" style="font-weight: bold; font-size: 1.1rem; color: var(--accent);">Waiting for data...</div>
-        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Configure IP to begin</div>
+        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Configure IP in settings</div>
     </div>
 
     <div class="stat-grid">
@@ -95,6 +95,7 @@
 </div>
 
 <script>
+    // 1. Initialize Settings
     let savedAddr = localStorage.getItem('radioIP') || '';
     document.getElementById('targetAddr').value = savedAddr;
 
@@ -110,42 +111,58 @@
         updateDisplay();
     }
 
-   async function updateDisplay() {
-    if (!savedAddr) return;
+    // 2. The Main Update Loop
+    async function updateDisplay() {
+        if (!savedAddr) {
+            document.getElementById('statusText').innerText = 'Set IP Address';
+            return;
+        }
 
-    const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
-    
-    // Instead of going to the hardware, we go to our local bridge
-    const target = `http://127.0.0.1:5000/get_data/${cleanAddr}/status.json`;
+        // Clean the address (remove http:// if it exists)
+        const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
+        
+        // IMPORTANT: We point to the local Python Bridge on port 5000
+        const target = `http://127.0.0.1:5000/get_data/${cleanAddr}/status.json`;
 
-    try {
-        const response = await fetch(target);
-        const data = await response.json();
-        // ... rest of your code stays the same ...
+        try {
+            const response = await fetch(target);
+            if (!response.ok) throw new Error('Bridge unreachable');
+            
+            const data = await response.json();
 
-            // Update UI
-            document.getElementById('freq_str').innerText = data.freq_str;
+            // Check if bridge returned an internal error
+            if (data.error) {
+                document.getElementById('statusText').innerText = 'Hardware Unreachable';
+                document.getElementById('dot').style.background = '#f59e0b';
+                return;
+            }
+
+            // Update UI with Hardware Data
+            document.getElementById('freq_str').innerText = data.freq_str || "--.-";
             document.getElementById('title').innerText = data.title || data.ps || "No Content";
             document.getElementById('artist').innerText = data.artist || data.name || "";
-            document.getElementById('hd_status').innerText = data.hd_status;
+            document.getElementById('hd_status').innerText = data.hd_status || "None";
             document.getElementById('pilot').innerText = data.pilot === 1 ? "Stereo" : "Mono";
             document.getElementById('rssi_val').innerText = data.rssi + " dBm";
 
-            // Meter Logic
+            // Signal Meter Calculation
             let rssi = parseInt(data.rssi);
             let percent = ((rssi + 110) / 70) * 100; 
             percent = Math.max(5, Math.min(100, percent));
             document.getElementById('meter_fill').style.width = percent + '%';
 
-            document.getElementById('statusText').innerText = 'Live';
+            // Connection Success
+            document.getElementById('statusText').innerText = 'Live (via Bridge)';
             document.getElementById('dot').style.background = '#22c55e';
+
         } catch (err) {
-            document.getElementById('statusText').innerText = 'Connection Error (Check CORS)';
+            document.getElementById('statusText').innerText = 'Bridge Offline';
             document.getElementById('dot').style.background = '#ef4444';
-            console.error("Connection error:", err);
+            console.error("Fetch Error:", err);
         }
     }
 
+    // Update every 3 seconds
     setInterval(updateDisplay, 3000);
     updateDisplay();
 </script>
