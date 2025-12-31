@@ -2,83 +2,150 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Universal Radio Monitor</title>
+    <title>Radio Monitor Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; display: flex; justify-content: center; padding: 20px; }
-        .card { background: #1e1e1e; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; border: 1px solid #333; }
-        .freq { font-size: 3rem; color: #00d1ff; text-align: center; margin: 10px 0; font-weight: bold; }
-        .label { color: #888; font-size: 0.8rem; text-transform: uppercase; }
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .stat-box { background: #252525; padding: 10px; border-radius: 8px; }
-        .now-playing { border-top: 1px solid #333; margin-top: 20px; padding-top: 20px; text-align: center; }
-        .error-msg { color: #ff4444; font-size: 0.8rem; display: none; margin-top: 10px; }
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --success: #22c55e;
+        }
+
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .card { background: var(--card); padding: 25px; border-radius: 20px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; position: relative; overflow: hidden; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .settings-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1.5rem; }
+
+        .freq { font-size: 3.5rem; color: var(--accent); text-align: center; margin: 5px 0; font-weight: 800; letter-spacing: -1px; }
+        
+        /* Signal Meter Styling */
+        .meter-container { margin: 20px 0; }
+        .meter-label-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; }
+        .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; border: 1px solid #334155; overflow: hidden; position: relative; }
+        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e); transition: width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat-box { background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 12px; border: 1px solid #334155; }
+        
+        .now-playing { background: rgba(56, 189, 248, 0.05); border-radius: 15px; padding: 15px; margin: 20px 0; text-align: center; border: 1px dashed rgba(56, 189, 248, 0.2); }
+        
+        #settingsDrawer { 
+            display: none; background: var(--card); position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+            padding: 25px; z-index: 10; flex-direction: column;
+        }
+        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; margin: 10px 0; box-sizing: border-box; }
+        button.save { background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
+
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <div class="label">Hardware Status: <span id="status" style="color: #ff4444;">Offline</span></div>
+    <div id="settingsDrawer">
+        <div class="header">
+            <h3>Configuration</h3>
+            <button class="settings-btn" onclick="toggleSettings()">✕</button>
+        </div>
+        <p class="label">Hardware Web Address</p>
+        <input type="text" id="targetAddr" placeholder="e.g. 192.168.1.100">
+        <button class="save" onclick="saveSettings()">Apply Settings</button>
+    </div>
+
+    <div class="header">
+        <div>
+            <span id="dot" class="status-dot" style="background: #ef4444;"></span>
+            <span class="label" id="statusText">Disconnected</span>
+        </div>
+        <button class="settings-btn" onclick="toggleSettings()">⚙</button>
+    </div>
     
-    <div class="freq" id="freq_str">--.- FM</div>
+    <div class="freq" id="freq_str">--.-</div>
+
+    <div class="meter-container">
+        <div class="meter-label-row">
+            <span>Signal Strength</span>
+            <span id="rssi_val">-120 dBm</span>
+        </div>
+        <div class="meter-bg">
+            <div id="meter_fill" class="meter-fill"></div>
+        </div>
+    </div>
 
     <div class="now-playing">
-        <div class="label">Now Playing</div>
-        <div id="title" style="font-weight: bold; margin-top: 5px;">Waiting for data...</div>
-        <div id="artist" style="color: #888;">---</div>
+        <div class="label" style="margin-bottom: 5px;">RDS / Metadata</div>
+        <div id="title" style="font-weight: bold; font-size: 1.1rem; color: var(--accent);">Waiting for data...</div>
+        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Configure IP to begin</div>
     </div>
 
     <div class="stat-grid">
         <div class="stat-box">
-            <div class="label">Signal (RSSI)</div>
-            <div id="rssi" style="font-size: 1.2rem;">0</div>
+            <div class="label">HD Radio</div>
+            <div id="hd_status" style="font-weight: bold; margin-top: 5px;">--</div>
         </div>
         <div class="stat-box">
-            <div class="label">HD Status</div>
-            <div id="hd_status" style="font-size: 0.9rem;">--</div>
+            <div class="label">Pilot</div>
+            <div id="pilot" style="font-weight: bold; margin-top: 5px;">--</div>
         </div>
     </div>
-    
-    <div id="error" class="error-msg">Connection Blocked. Check IP or Proxy.</div>
 </div>
 
 <script>
-    // --- CONFIGURATION ---
-    const HARDWARE_IP = '192.168.1.100'; // Change to your hardware's local IP
-    const DATA_PATH = '/status.json';    // The page on your hardware
-    
-    // We use a public CORS proxy to "bridge" the request
-    const PROXY_URL = 'https://api.allorigins.win/get?url=';
+    let savedAddr = localStorage.getItem('radioIP') || '';
+    document.getElementById('targetAddr').value = savedAddr;
+
+    function toggleSettings() {
+        const drawer = document.getElementById('settingsDrawer');
+        drawer.style.display = (drawer.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    function saveSettings() {
+        savedAddr = document.getElementById('targetAddr').value.trim();
+        localStorage.setItem('radioIP', savedAddr);
+        toggleSettings();
+        updateDisplay();
+    }
 
     async function updateDisplay() {
-        const fullUrl = `http://${HARDWARE_IP}${DATA_PATH}`;
-        const target = PROXY_URL + encodeURIComponent(fullUrl);
+        if (!savedAddr) return;
+
+        const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
+        const target = `https://api.allorigins.win/get?url=${encodeURIComponent('http://' + cleanAddr + '/status.json')}`;
 
         try {
             const response = await fetch(target);
-            const wrapper = await response.json(); // The proxy wraps the data in a "contents" string
+            const wrapper = await response.json();
             const data = JSON.parse(wrapper.contents);
 
-            // Mapping your specific JSON keys
+            // Text Updates
             document.getElementById('freq_str').innerText = data.freq_str;
-            document.getElementById('title').innerText = data.title || data.ps || "No Title";
-            document.getElementById('artist').innerText = data.artist || "Unknown Artist";
-            document.getElementById('rssi').innerText = data.rssi + " dBm";
+            document.getElementById('title').innerText = data.title || data.ps || "No Content";
+            document.getElementById('artist').innerText = data.artist || data.name || "";
             document.getElementById('hd_status').innerText = data.hd_status;
+            document.getElementById('pilot').innerText = data.pilot === 1 ? "Stereo" : "Mono";
+            document.getElementById('rssi_val').innerText = data.rssi + " dBm";
 
-            document.getElementById('status').innerText = 'Online';
-            document.getElementById('status').style.color = '#00ff88';
-            document.getElementById('error').style.display = 'none';
+            // Meter Logic
+            // Mapping RSSI: Typical broadcast range is roughly -100 (weak) to -40 (strong)
+            let rssi = parseInt(data.rssi);
+            let percent = ((rssi + 110) / 70) * 100; 
+            percent = Math.max(5, Math.min(100, percent));
+            document.getElementById('meter_fill').style.width = percent + '%';
 
+            document.getElementById('statusText').innerText = 'Live';
+            document.getElementById('dot').style.background = '#22c55e';
         } catch (err) {
-            document.getElementById('status').innerText = 'Offline';
-            document.getElementById('status').style.color = '#ff4444';
-            document.getElementById('error').style.display = 'block';
+            document.getElementById('statusText').innerText = 'Offline';
+            document.getElementById('dot').style.background = '#ef4444';
         }
     }
 
-    setInterval(updateDisplay, 2000);
+    setInterval(updateDisplay, 3000);
     updateDisplay();
 </script>
-
 </body>
 </html>
