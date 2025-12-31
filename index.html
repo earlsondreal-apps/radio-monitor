@@ -110,16 +110,18 @@
         updateDisplay();
     }
 
-    async function updateDisplay() {
-        if (!savedAddr) return;
+   async function updateDisplay() {
+    if (!savedAddr) return;
 
-        // No proxy - we go straight to the local IP
-        const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
-        const target = `http://${cleanAddr}/status.json`;
+    const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
+    
+    // Instead of going to the hardware, we go to our local bridge
+    const target = `http://127.0.0.1:5000/get_data/${cleanAddr}/status.json`;
 
-        try {
-            const response = await fetch(target);
-            const data = await response.json();
+    try {
+        const response = await fetch(target);
+        const data = await response.json();
+        // ... rest of your code stays the same ...
 
             // Update UI
             document.getElementById('freq_str').innerText = data.freq_str;
