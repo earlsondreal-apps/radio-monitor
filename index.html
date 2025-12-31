@@ -113,15 +113,15 @@
     async function updateDisplay() {
         if (!savedAddr) return;
 
+        // No proxy - we go straight to the local IP
         const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
-        const target = `https://api.allorigins.win/get?url=${encodeURIComponent('http://' + cleanAddr + '/status.json')}`;
+        const target = `http://${cleanAddr}/status.json`;
 
         try {
             const response = await fetch(target);
-            const wrapper = await response.json();
-            const data = JSON.parse(wrapper.contents);
+            const data = await response.json();
 
-            // Text Updates
+            // Update UI
             document.getElementById('freq_str').innerText = data.freq_str;
             document.getElementById('title').innerText = data.title || data.ps || "No Content";
             document.getElementById('artist').innerText = data.artist || data.name || "";
@@ -130,7 +130,6 @@
             document.getElementById('rssi_val').innerText = data.rssi + " dBm";
 
             // Meter Logic
-            // Mapping RSSI: Typical broadcast range is roughly -100 (weak) to -40 (strong)
             let rssi = parseInt(data.rssi);
             let percent = ((rssi + 110) / 70) * 100; 
             percent = Math.max(5, Math.min(100, percent));
@@ -139,8 +138,9 @@
             document.getElementById('statusText').innerText = 'Live';
             document.getElementById('dot').style.background = '#22c55e';
         } catch (err) {
-            document.getElementById('statusText').innerText = 'Offline';
+            document.getElementById('statusText').innerText = 'Connection Error (Check CORS)';
             document.getElementById('dot').style.background = '#ef4444';
+            console.error("Connection error:", err);
         }
     }
 
