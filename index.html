@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Radio Monitor Pro (Mac Bridge Version)</title>
+    <title>Radio Monitor Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root {
@@ -12,32 +12,35 @@
             --text: #f8fafc;
             --text-dim: #94a3b8;
             --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
         }
 
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; margin: 0; }
         .card { background: var(--card); padding: 25px; border-radius: 20px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; position: relative; overflow: hidden; }
         
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .settings-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1.5rem; }
+        .settings-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1.5rem; transition: color 0.2s; }
+        .settings-btn:hover { color: var(--accent); }
 
         .freq { font-size: 3.5rem; color: var(--accent); text-align: center; margin: 5px 0; font-weight: 800; letter-spacing: -1px; }
         
         .meter-container { margin: 20px 0; }
         .meter-label-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; }
         .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; border: 1px solid #334155; overflow: hidden; position: relative; }
-        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e); transition: width 0.5s ease; }
+        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--danger), var(--warning), var(--success)); transition: width 0.4s ease; }
         
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .stat-box { background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 12px; border: 1px solid #334155; }
         
-        .now-playing { background: rgba(56, 189, 248, 0.05); border-radius: 15px; padding: 15px; margin: 20px 0; text-align: center; border: 1px dashed rgba(56, 189, 248, 0.2); }
+        .now-playing { background: rgba(56, 189, 248, 0.05); border-radius: 15px; padding: 15px; margin: 20px 0; text-align: center; border: 1px dashed rgba(56, 189, 248, 0.2); min-height: 80px; }
         
         #settingsDrawer { 
             display: none; background: var(--card); position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
             padding: 25px; z-index: 10; flex-direction: column;
         }
-        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; margin: 10px 0; box-sizing: border-box; }
-        button.save { background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
+        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; margin: 10px 0; box-sizing: border-box; font-size: 14px; }
+        button.save { background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
 
         .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
     </style>
@@ -50,15 +53,17 @@
             <h3>Configuration</h3>
             <button class="settings-btn" onclick="toggleSettings()">✕</button>
         </div>
-        <p class="label">Hardware Web Address</p>
-        <input type="text" id="targetAddr" placeholder="e.g. 192.168.1.100">
-        <button class="save" onclick="saveSettings()">Apply Settings</button>
-        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 15px;">Note: Ensure bridge.py is running in the background.</p>
+        <p style="font-size: 0.8rem; color: var(--text-dim);">Enter the full address including the file name:</p>
+        <input type="text" id="targetAddr" placeholder="e.g. 50.191.170.241:1568/now.json">
+        <button class="save" onclick="saveSettings()">Apply & Connect</button>
+        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 20px;">
+            The Python bridge must be running in your terminal for this to work.
+        </p>
     </div>
 
     <div class="header">
         <div>
-            <span id="dot" class="status-dot" style="background: #ef4444;"></span>
+            <span id="dot" class="status-dot" style="background: var(--danger);"></span>
             <span class="label" id="statusText">Bridge Offline</span>
         </div>
         <button class="settings-btn" onclick="toggleSettings()">⚙</button>
@@ -69,7 +74,7 @@
     <div class="meter-container">
         <div class="meter-label-row">
             <span>Signal Strength</span>
-            <span id="rssi_val">-120 dBm</span>
+            <span id="rssi_val">0 dBm</span>
         </div>
         <div class="meter-bg">
             <div id="meter_fill" class="meter-fill"></div>
@@ -77,14 +82,14 @@
     </div>
 
     <div class="now-playing">
-        <div class="label" style="margin-bottom: 5px;">RDS / Metadata</div>
-        <div id="title" style="font-weight: bold; font-size: 1.1rem; color: var(--accent);">Waiting for data...</div>
-        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Configure IP in settings</div>
+        <div class="label" style="margin-bottom: 5px;">Metadata</div>
+        <div id="title" style="font-weight: bold; font-size: 1.1rem; color: var(--accent);">Waiting...</div>
+        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Check settings</div>
     </div>
 
     <div class="stat-grid">
         <div class="stat-box">
-            <div class="label">HD Radio</div>
+            <div class="label">HD Status</div>
             <div id="hd_status" style="font-weight: bold; margin-top: 5px;">--</div>
         </div>
         <div class="stat-box">
@@ -95,7 +100,6 @@
 </div>
 
 <script>
-    // 1. Initialize Settings
     let savedAddr = localStorage.getItem('radioIP') || '';
     document.getElementById('targetAddr').value = savedAddr;
 
@@ -111,58 +115,53 @@
         updateDisplay();
     }
 
-    // 2. The Main Update Loop
     async function updateDisplay() {
         if (!savedAddr) {
-            document.getElementById('statusText').innerText = 'Set IP Address';
+            document.getElementById('statusText').innerText = 'Enter IP in Settings';
             return;
         }
 
-        // Clean the address (remove http:// if it exists)
-        const cleanAddr = savedAddr.replace(/^https?:\/\//, '');
+        // Clean protocol if user accidentally typed it
+        const cleanPath = savedAddr.replace(/^https?:\/\//, '');
         
-        // IMPORTANT: We point to the local Python Bridge on port 5000
-       const target = https://www.google.com/search?q=http://127.0.0.1:5000/get_data/${cleanAddr}/now.json;
+        // We call our bridge, which now just passes the address through
+        const target = `http://127.0.0.1:5000/get_data/${cleanPath}`;
 
         try {
             const response = await fetch(target);
-            if (!response.ok) throw new Error('Bridge unreachable');
+            if (!response.ok) throw new Error('Bridge Error');
             
             const data = await response.json();
 
-            // Check if bridge returned an internal error
             if (data.error) {
-                document.getElementById('statusText').innerText = 'Hardware Unreachable';
-                document.getElementById('dot').style.background = '#f59e0b';
+                document.getElementById('statusText').innerText = 'Hardware Offline';
+                document.getElementById('dot').style.background = 'var(--warning)';
                 return;
             }
 
-            // Update UI with Hardware Data
+            // Update UI
             document.getElementById('freq_str').innerText = data.freq_str || "--.-";
-            document.getElementById('title').innerText = data.title || data.ps || "No Content";
+            document.getElementById('title').innerText = data.title || data.ps || "No Data";
             document.getElementById('artist').innerText = data.artist || data.name || "";
             document.getElementById('hd_status').innerText = data.hd_status || "None";
-            document.getElementById('pilot').innerText = data.pilot === 1 ? "Stereo" : "Mono";
-            document.getElementById('rssi_val').innerText = data.rssi + " dBm";
+            document.getElementById('pilot').innerText = (data.pilot === 1 || data.pilot === "1") ? "Stereo" : "Mono";
+            document.getElementById('rssi_val').innerText = (data.rssi || 0) + " dBm";
 
-            // Signal Meter Calculation
-            let rssi = parseInt(data.rssi);
+            // Signal Meter (Mapping -110 to -40)
+            let rssi = parseInt(data.rssi) || -110;
             let percent = ((rssi + 110) / 70) * 100; 
             percent = Math.max(5, Math.min(100, percent));
             document.getElementById('meter_fill').style.width = percent + '%';
 
-            // Connection Success
-            document.getElementById('statusText').innerText = 'Live (via Bridge)';
-            document.getElementById('dot').style.background = '#22c55e';
+            document.getElementById('statusText').innerText = 'Connected';
+            document.getElementById('dot').style.background = 'var(--success)';
 
         } catch (err) {
             document.getElementById('statusText').innerText = 'Bridge Offline';
-            document.getElementById('dot').style.background = '#ef4444';
-            console.error("Fetch Error:", err);
+            document.getElementById('dot').style.background = 'var(--danger)';
         }
     }
 
-    // Update every 3 seconds
     setInterval(updateDisplay, 3000);
     updateDisplay();
 </script>
