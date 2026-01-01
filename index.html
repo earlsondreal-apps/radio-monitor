@@ -20,14 +20,14 @@
         .card { background: var(--card); padding: 25px; border-radius: 20px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; position: relative; overflow: hidden; }
         
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .settings-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1.5rem; transition: color 0.2s; }
-        .settings-btn:hover { color: var(--accent); }
+        .settings-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1.8rem; line-height: 1; padding: 5px; transition: transform 0.2s; }
+        .settings-btn:hover { color: var(--accent); transform: rotate(45deg); }
 
         .freq { font-size: 3.5rem; color: var(--accent); text-align: center; margin: 5px 0; font-weight: 800; letter-spacing: -1px; }
         
         .meter-container { margin: 20px 0; }
         .meter-label-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; }
-        .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; border: 1px solid #334155; overflow: hidden; position: relative; }
+        .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; border: 1px solid #334155; overflow: hidden; }
         .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--danger), var(--warning), var(--success)); transition: width 0.4s ease; }
         
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -35,11 +35,17 @@
         
         .now-playing { background: rgba(56, 189, 248, 0.05); border-radius: 15px; padding: 15px; margin: 20px 0; text-align: center; border: 1px dashed rgba(56, 189, 248, 0.2); min-height: 80px; }
         
+        /* Modal Window Styling */
         #settingsDrawer { 
-            display: none; background: var(--card); position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
-            padding: 25px; z-index: 10; flex-direction: column;
+            display: none; 
+            background: var(--card); 
+            position: absolute; 
+            top: 0; left: 0; right: 0; bottom: 0; 
+            padding: 25px; 
+            z-index: 100; 
+            flex-direction: column;
         }
-        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; margin: 10px 0; box-sizing: border-box; font-size: 14px; }
+        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; margin: 10px 0; box-sizing: border-box; }
         button.save { background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
 
         .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
@@ -50,23 +56,25 @@
 <div class="card">
     <div id="settingsDrawer">
         <div class="header">
-            <h3>Configuration</h3>
+            <h3 style="margin:0">Settings</h3>
             <button class="settings-btn" onclick="toggleSettings()">✕</button>
         </div>
-        <p style="font-size: 0.8rem; color: var(--text-dim);">Enter the full address including the file name:</p>
-        <input type="text" id="targetAddr" placeholder="e.g. 50.191.170.241:1568/now.json">
-        <button class="save" onclick="saveSettings()">Apply & Connect</button>
-        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 20px;">
-            The Python bridge must be running in your terminal for this to work.
+        <p style="font-size: 0.8rem; color: var(--text-dim);">IP Address & File Path:</p>
+        <input type="text" id="targetAddr" placeholder="50.191.170.241:1568/now.json">
+        <button class="save" onclick="saveSettings()">Save & Connect</button>
+        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 20px; line-height: 1.4;">
+            1. Run <b>python3 bridge.py</b> in Terminal.<br>
+            2. Enter IP:Port/file.json above.<br>
+            3. Click Save.
         </p>
     </div>
 
     <div class="header">
         <div>
             <span id="dot" class="status-dot" style="background: var(--danger);"></span>
-            <span class="label" id="statusText">Bridge Offline</span>
+            <span class="label" id="statusText" style="font-size: 0.7rem;">Bridge Offline</span>
         </div>
-        <button class="settings-btn" onclick="toggleSettings()">⚙</button>
+        <button class="settings-btn" id="gearBtn" onclick="toggleSettings()">⚙</button>
     </div>
     
     <div class="freq" id="freq_str">--.-</div>
@@ -82,9 +90,9 @@
     </div>
 
     <div class="now-playing">
-        <div class="label" style="margin-bottom: 5px;">Metadata</div>
+        <div class="label" style="margin-bottom: 5px;">RDS Data</div>
         <div id="title" style="font-weight: bold; font-size: 1.1rem; color: var(--accent);">Waiting...</div>
-        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Check settings</div>
+        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Click gear to config</div>
     </div>
 
     <div class="stat-grid">
@@ -100,68 +108,79 @@
 </div>
 
 <script>
-    let savedAddr = localStorage.getItem('radioIP') || '';
-    document.getElementById('targetAddr').value = savedAddr;
-
+    // --- SETTINGS LOGIC ---
     function toggleSettings() {
         const drawer = document.getElementById('settingsDrawer');
-        drawer.style.display = (drawer.style.display === 'flex') ? 'none' : 'flex';
+        if (drawer.style.display === 'flex') {
+            drawer.style.display = 'none';
+        } else {
+            drawer.style.display = 'flex';
+        }
     }
 
     function saveSettings() {
-        savedAddr = document.getElementById('targetAddr').value.trim();
-        localStorage.setItem('radioIP', savedAddr);
+        const inputVal = document.getElementById('targetAddr').value.trim();
+        localStorage.setItem('radioIP', inputVal);
         toggleSettings();
         updateDisplay();
     }
 
+    // Load saved value on startup
+    const saved = localStorage.getItem('radioIP');
+    if (saved) {
+        document.getElementById('targetAddr').value = saved;
+    }
+
+    // --- DATA FETCHING LOGIC ---
     async function updateDisplay() {
-        if (!savedAddr) {
-            document.getElementById('statusText').innerText = 'Enter IP in Settings';
+        const currentAddr = localStorage.getItem('radioIP');
+        if (!currentAddr) {
+            document.getElementById('statusText').innerText = 'Setup Required';
             return;
         }
 
-        // Clean protocol if user accidentally typed it
-        const cleanPath = savedAddr.replace(/^https?:\/\//, '');
-        
-        // We call our bridge, which now just passes the address through
-        const target = `http://127.0.0.1:5000/get_data/${cleanPath}`;
+        const cleanPath = currentAddr.replace(/^https?:\/\//, '');
+        const bridgeUrl = `http://127.0.0.1:5000/get_data/${cleanPath}`;
 
         try {
-            const response = await fetch(target);
-            if (!response.ok) throw new Error('Bridge Error');
+            const response = await fetch(bridgeUrl);
+            if (!response.ok) throw new Error('Bridge unreachable');
             
             const data = await response.json();
 
+            // If hardware is offline but bridge is online
             if (data.error) {
                 document.getElementById('statusText').innerText = 'Hardware Offline';
                 document.getElementById('dot').style.background = 'var(--warning)';
                 return;
             }
 
-            // Update UI
+            // Update Text
             document.getElementById('freq_str').innerText = data.freq_str || "--.-";
             document.getElementById('title').innerText = data.title || data.ps || "No Data";
             document.getElementById('artist').innerText = data.artist || data.name || "";
             document.getElementById('hd_status').innerText = data.hd_status || "None";
-            document.getElementById('pilot').innerText = (data.pilot === 1 || data.pilot === "1") ? "Stereo" : "Mono";
+            document.getElementById('pilot').innerText = (data.pilot == 1) ? "Stereo" : "Mono";
             document.getElementById('rssi_val').innerText = (data.rssi || 0) + " dBm";
 
-            // Signal Meter (Mapping -110 to -40)
+            // Update Signal Meter
             let rssi = parseInt(data.rssi) || -110;
             let percent = ((rssi + 110) / 70) * 100; 
             percent = Math.max(5, Math.min(100, percent));
             document.getElementById('meter_fill').style.width = percent + '%';
 
+            // Status Green
             document.getElementById('statusText').innerText = 'Connected';
             document.getElementById('dot').style.background = 'var(--success)';
 
         } catch (err) {
+            // Status Red
             document.getElementById('statusText').innerText = 'Bridge Offline';
             document.getElementById('dot').style.background = 'var(--danger)';
         }
     }
 
+    // Start loops
     setInterval(updateDisplay, 3000);
     updateDisplay();
 </script>
