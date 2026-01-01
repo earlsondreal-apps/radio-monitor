@@ -1,188 +1,123 @@
+import sys
+import requests
+import os
+from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtCore import QTimer
+
+# THE UI (HTML/CSS) - Removed localStorage logic
+HTML_CODE = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Radio Monitor Pro</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --accent: #38bdf8;
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
-            --success: #22c55e;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-        }
-
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; margin: 0; }
-        .card { background: var(--card); padding: 25px; border-radius: 20px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; position: relative; overflow: hidden; }
-        
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .settings-btn { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 1.8rem; line-height: 1; padding: 5px; transition: transform 0.2s; }
-        .settings-btn:hover { color: var(--accent); transform: rotate(45deg); }
-
-        .freq { font-size: 3.5rem; color: var(--accent); text-align: center; margin: 5px 0; font-weight: 800; letter-spacing: -1px; }
-        
-        .meter-container { margin: 20px 0; }
-        .meter-label-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; }
-        .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; border: 1px solid #334155; overflow: hidden; }
-        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--danger), var(--warning), var(--success)); transition: width 0.4s ease; }
-        
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .stat-box { background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 12px; border: 1px solid #334155; }
-        
-        .now-playing { background: rgba(56, 189, 248, 0.05); border-radius: 15px; padding: 15px; margin: 20px 0; text-align: center; border: 1px dashed rgba(56, 189, 248, 0.2); min-height: 80px; }
-        
-        /* Modal Window Styling */
-        #settingsDrawer { 
-            display: none; 
-            background: var(--card); 
-            position: absolute; 
-            top: 0; left: 0; right: 0; bottom: 0; 
-            padding: 25px; 
-            z-index: 100; 
-            flex-direction: column;
-        }
-        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; margin: 10px 0; box-sizing: border-box; }
-        button.save { background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
-
-        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        body { font-family: -apple-system, sans-serif; background: #0f172a; color: white; padding: 20px; margin: 0; overflow: hidden; }
+        .card { background: #1e293b; padding: 20px; border-radius: 15px; border: 1px solid #334155; height: 380px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .freq { font-size: 3.5rem; color: #38bdf8; text-align: center; font-weight: 800; margin: 10px 0; }
+        .meter-bg { background: #0f172a; height: 12px; border-radius: 6px; margin: 20px 0; overflow: hidden; border: 1px solid #334155; }
+        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e); transition: width 0.5s; }
+        .label { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+        input { background: #0f172a; border: 1px solid #475569; color: white; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-top: 10px; font-size: 14px; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; background: #ef4444; margin-right: 5px; }
     </style>
 </head>
 <body>
-
-<div class="card">
-    <div id="settingsDrawer">
+    <div class="card">
         <div class="header">
-            <h3 style="margin:0">Settings</h3>
-            <button class="settings-btn" onclick="toggleSettings()">✕</button>
+            <div><span id="dot" class="status-dot"></span> <span id="status" class="label">Disconnected</span></div>
+            <div class="label">Radio Monitor Pro</div>
         </div>
-        <p style="font-size: 0.8rem; color: var(--text-dim);">IP Address & File Path:</p>
-        <input type="text" id="targetAddr" placeholder="50.191.170.241:1568/now.json">
-        <button class="save" onclick="saveSettings()">Save & Connect</button>
-        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 20px; line-height: 1.4;">
-            1. Run <b>python3 bridge.py</b> in Terminal.<br>
-            2. Enter IP:Port/file.json above.<br>
-            3. Click Save.
-        </p>
+        
+        <div class="freq" id="freq">--.-</div>
+        
+        <div class="meter-bg"><div id="fill" class="meter-fill"></div></div>
+        
+        <div style="text-align:center; margin-bottom:20px; min-height: 60px;">
+            <div id="title" style="font-weight:bold; font-size:1.2rem; color: #f8fafc;">Waiting for Data</div>
+            <div id="artist" style="color:#94a3b8; margin-top: 5px;">Enter IP:Port/file.json below</div>
+        </div>
+
+        <div class="label">Hardware Address</div>
+        <input type="text" id="addr" placeholder="e.g. 50.191.170.241:1568/now.json">
     </div>
 
-    <div class="header">
-        <div>
-            <span id="dot" class="status-dot" style="background: var(--danger);"></span>
-            <span class="label" id="statusText" style="font-size: 0.7rem;">Bridge Offline</span>
-        </div>
-        <button class="settings-btn" id="gearBtn" onclick="toggleSettings()">⚙</button>
-    </div>
-    
-    <div class="freq" id="freq_str">--.-</div>
-
-    <div class="meter-container">
-        <div class="meter-label-row">
-            <span>Signal Strength</span>
-            <span id="rssi_val">0 dBm</span>
-        </div>
-        <div class="meter-bg">
-            <div id="meter_fill" class="meter-fill"></div>
-        </div>
-    </div>
-
-    <div class="now-playing">
-        <div class="label" style="margin-bottom: 5px;">RDS Data</div>
-        <div id="title" style="font-weight: bold; font-size: 1.1rem; color: var(--accent);">Waiting...</div>
-        <div id="artist" style="color: var(--text-dim); margin-top: 4px; font-size: 0.9rem;">Click gear to config</div>
-    </div>
-
-    <div class="stat-grid">
-        <div class="stat-box">
-            <div class="label">HD Status</div>
-            <div id="hd_status" style="font-weight: bold; margin-top: 5px;">--</div>
-        </div>
-        <div class="stat-box">
-            <div class="label">Pilot</div>
-            <div id="pilot" style="font-weight: bold; margin-top: 5px;">--</div>
-        </div>
-    </div>
-</div>
-
-<script>
-    // --- SETTINGS LOGIC ---
-    function toggleSettings() {
-        const drawer = document.getElementById('settingsDrawer');
-        if (drawer.style.display === 'flex') {
-            drawer.style.display = 'none';
-        } else {
-            drawer.style.display = 'flex';
-        }
-    }
-
-    function saveSettings() {
-        const inputVal = document.getElementById('targetAddr').value.trim();
-        localStorage.setItem('radioIP', inputVal);
-        toggleSettings();
-        updateDisplay();
-    }
-
-    // Load saved value on startup
-    const saved = localStorage.getItem('radioIP');
-    if (saved) {
-        document.getElementById('targetAddr').value = saved;
-    }
-
-    // --- DATA FETCHING LOGIC ---
-    async function updateDisplay() {
-        const currentAddr = localStorage.getItem('radioIP');
-        if (!currentAddr) {
-            document.getElementById('statusText').innerText = 'Setup Required';
-            return;
-        }
-
-        const cleanPath = currentAddr.replace(/^https?:\/\//, '');
-        const bridgeUrl = `http://127.0.0.1:5000/get_data/${cleanPath}`;
-
-        try {
-            const response = await fetch(bridgeUrl);
-            if (!response.ok) throw new Error('Bridge unreachable');
-            
-            const data = await response.json();
-
-            // If hardware is offline but bridge is online
-            if (data.error) {
-                document.getElementById('statusText').innerText = 'Hardware Offline';
-                document.getElementById('dot').style.background = 'var(--warning)';
+    <script>
+        // This function is called by Python to update the screen
+        function updateUI(data) {
+            if(data.error) {
+                document.getElementById('status').innerText = "Offline";
+                document.getElementById('dot').style.background = "#ef4444";
                 return;
             }
-
-            // Update Text
-            document.getElementById('freq_str').innerText = data.freq_str || "--.-";
+            document.getElementById('freq').innerText = data.freq_str || "--.-";
             document.getElementById('title').innerText = data.title || data.ps || "No Data";
-            document.getElementById('artist').innerText = data.artist || data.name || "";
-            document.getElementById('hd_status').innerText = data.hd_status || "None";
-            document.getElementById('pilot').innerText = (data.pilot == 1) ? "Stereo" : "Mono";
-            document.getElementById('rssi_val').innerText = (data.rssi || 0) + " dBm";
-
-            // Update Signal Meter
+            document.getElementById('artist').innerText = data.artist || "";
+            document.getElementById('status').innerText = "Live";
+            document.getElementById('dot').style.background = "#22c55e";
+            
             let rssi = parseInt(data.rssi) || -110;
-            let percent = ((rssi + 110) / 70) * 100; 
-            percent = Math.max(5, Math.min(100, percent));
-            document.getElementById('meter_fill').style.width = percent + '%';
-
-            // Status Green
-            document.getElementById('statusText').innerText = 'Connected';
-            document.getElementById('dot').style.background = 'var(--success)';
-
-        } catch (err) {
-            // Status Red
-            document.getElementById('statusText').innerText = 'Bridge Offline';
-            document.getElementById('dot').style.background = 'var(--danger)';
+            let percent = Math.max(5, Math.min(100, ((rssi + 110) / 70) * 100));
+            document.getElementById('fill').style.width = percent + '%';
         }
-    }
-
-    // Start loops
-    setInterval(updateDisplay, 3000);
-    updateDisplay();
-</script>
+    </script>
 </body>
 </html>
+"""
+
+class RadioApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Radio Monitor")
+        self.setFixedSize(400, 480)
+        
+        # Setup Browser
+        self.browser = QWebEngineView()
+        self.browser.setHtml(HTML_CODE)
+        self.setCentralWidget(self.browser)
+        
+        # Config file path
+        self.config_path = os.path.join(os.path.dirname(__file__), "config.txt")
+        
+        # Load saved address and put it in the input field once the page loads
+        self.browser.loadFinished.connect(self.load_saved_address)
+        
+        # Timer to fetch data every 3 seconds
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.run_cycle)
+        self.timer.start(3000)
+
+    def load_saved_address(self):
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r") as f:
+                addr = f.read().strip()
+                # Inject the saved address into the HTML input box
+                self.browser.page().runJavaScript(f"document.getElementById('addr').value = '{addr}';")
+
+    def run_cycle(self):
+        # 1. Get whatever is currently typed in the input box
+        self.browser.page().runJavaScript("document.getElementById('addr').value", self.fetch_data)
+
+    def fetch_data(self, addr):
+        if not addr: return
+        
+        # 2. Save the address to config.txt so it's remembered next time
+        with open(self.config_path, "w") as f:
+            f.write(addr)
+            
+        # 3. Fetch from hardware
+        try:
+            r = requests.get(f"http://{addr}", timeout=2)
+            if r.status_code == 200:
+                # Send data to HTML
+                self.browser.page().runJavaScript(f"updateUI({r.text})")
+            else:
+                self.browser.page().runJavaScript("updateUI({'error': true})")
+        except:
+            self.browser.page().runJavaScript("updateUI({'error': true})")
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = RadioApp()
+    window.show()
+    sys.exit(app.exec_())
